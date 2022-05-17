@@ -25,18 +25,11 @@
 #include <bsd_auth.h>
 #endif
 
-#include "imgur.h"
-#include "twilio.h"
-
 #define CMD_LENGTH 500
 
 #define POWEROFF 1
 #define USBOFF 1
 #define STRICT_USBOFF 0
-#define TWILIO_SEND 1
-#define WEBCAM_SHOT 1
-#define IMGUR_UPLOAD 0
-#define PLAY_AUDIO 1
 #define TRANSPARENT 1
 
 char *g_pw = NULL;
@@ -256,244 +249,6 @@ usbon(void) {
 #endif
 }
 
-// Take a screenshot of whoever is at the keyboard.
-static int
-webcam_shot(int async) {
-#if WEBCAM_SHOT
-  char cmd[CMD_LENGTH];
-
-  int r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "ffmpeg -y -loglevel quiet -f video4linux2 -i /dev/video0"
-    " -frames:v 1 -f image2 %s/slock.jpg%s",
-    getenv("HOME"),
-    async ? " &" : ""
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    return 0;
-
-  system(cmd);
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-// Send an SMS via twilio.
-static int
-twilio_send(const char *msg, char *link, int async) {
-#if TWILIO_SEND
-  char cmd[CMD_LENGTH];
-
-  // Send the SMS/MMS via Twilio
-  int r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "curl -s -A '' -X POST https://api.twilio.com/2010-04-01/Accounts/"
-    TWILIO_ACCOUNT "/SMS/Messages.json"
-    " -u " TWILIO_AUTH
-    " --data-urlencode 'From=" TWILIO_FROM "'"
-    " --data-urlencode 'To=" TWILIO_TO "'"
-    " --data-urlencode 'Body=%s'"
-    " --data-urlencode 'MediaUrl=%s' > /dev/null"
-    "%s",
-    msg,
-    link != NULL ? link : "",
-    async ? " &" : ""
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    return 0;
-
-  system(cmd);
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-// Upload image for MMS.
-static int
-imgur_upload(char **link, char **hash) {
-  *link = NULL;
-  *hash = NULL;
-
-#if IMGUR_UPLOAD
-  const char *HOME = getenv("HOME");
-  char cmd[CMD_LENGTH];
-  int r;
-
-  // Upload the imgur image:
-  r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "curl -s -A '' -X POST"
-    " -H 'Authorization: Client-ID " IMGUR_CLIENT "'"
-    " -F 'image=@%s/slock.jpg'"
-    " 'https://api.imgur.com/3/image' > %s/slock_imgur.curl",
-    HOME,
-    HOME
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    goto cleanup;
-
-  system(cmd);
-
-  // Get the link:
-  r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "cat %s/slock_imgur.curl"
-    " | grep -o '\"link\":\"[^\"]\\+'"
-    " | sed 's/\\\\//g'"
-    " | grep -o '[^\"]\\+$'"
-    " > %s/slock_imgur.link",
-    HOME,
-    HOME
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    goto cleanup;
-
-  system(cmd);
-
-  // Get the hash:
-  r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "cat %s/slock_imgur.curl"
-    " | grep -o '\"deletehash\":\"[^\"]\\+'"
-    " | grep -o '[^\"]\\+$'"
-    " > %s/slock_imgur.hash",
-    HOME,
-    HOME
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    goto cleanup;
-
-  system(cmd);
-
-  r = snprintf(cmd, CMD_LENGTH, "%s/slock_imgur.link", HOME);
-
-  if (r < 0 || r >= CMD_LENGTH)
-    goto cleanup;
-
-  *link = read_file(cmd);
-
-  r = snprintf(cmd, CMD_LENGTH, "%s/slock_imgur.hash", HOME);
-
-  if (r < 0 || r >= CMD_LENGTH)
-    goto cleanup;
-
-  *hash = read_file(cmd);
-
-cleanup:
-  r = snprintf(cmd, CMD_LENGTH, "%s/slock_imgur.curl", HOME);
-
-  if (r >= 0 && r < CMD_LENGTH)
-    unlink(cmd);
-
-  r = snprintf(cmd, CMD_LENGTH, "%s/slock_imgur.link", HOME);
-
-  if (r >= 0 && r < CMD_LENGTH)
-    unlink(cmd);
-
-  r = snprintf(cmd, CMD_LENGTH, "%s/slock_imgur.hash", HOME);
-
-  if (r >= 0 && r < CMD_LENGTH)
-    unlink(cmd);
-
-  if (*link == NULL || *hash == NULL) {
-    if (*link != NULL)
-      free(*link);
-    if (*hash != NULL)
-      free(*hash);
-    return 0;
-  }
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-// Delete image once MMS is sent.
-static int
-imgur_delete(char *hash) {
-#if IMGUR_UPLOAD
-  char cmd[CMD_LENGTH];
-
-  // Delete the imgur image:
-  int r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "curl -s -A '' -X DELETE"
-    " -H 'Authorization: Client-ID " IMGUR_CLIENT "'"
-    " 'https://api.imgur.com/3/image/%s'",
-    hash
-  );
-
-  if (r < 0 || r >= CMD_LENGTH)
-    return 0;
-
-  system(cmd);
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-static int
-play_beep(int async) {
-#if PLAY_AUDIO
-  char cmd[CMD_LENGTH];
-
-  int r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "aplay %s/slock/beep.wav 2> /dev/null%s",
-    getenv("HOME"),
-    async ? " &" : ""
-  );
-
-  if (r >= 0 && r < CMD_LENGTH)
-    system(cmd);
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-static int
-play_alarm(int async) {
-#if PLAY_AUDIO
-  char cmd[CMD_LENGTH];
-
-  int r = snprintf(
-    cmd,
-    CMD_LENGTH,
-    "aplay %s/slock/police.wav 2> /dev/null%s",
-    getenv("HOME"),
-    async ? " &" : ""
-  );
-
-  if (r >= 0 && r < CMD_LENGTH)
-    system(cmd);
-
-  return 1;
-#else
-  return 0;
-#endif
-}
-
 static void
 #ifdef HAVE_BSD_AUTH
 readpw(Display *dpy)
@@ -565,25 +320,6 @@ readpw(Display *dpy, const char *pws)
             // Disable alt+sysrq and ctrl+alt+backspace
             disable_kill();
 
-            // Take a webcam shot of whoever is tampering with our machine:
-            webcam_shot(0);
-
-            // Upload the image:
-            char *link, *hash;
-            int success = imgur_upload(&link, &hash);
-
-            // Send an SMS/MMS via twilio.
-            twilio_send("Bad screenlock password.", link, 0);
-
-            // Success. Cleanup.
-            if (success) {
-              // Delete the image from imgur.
-              imgur_delete(hash);
-
-              free(link);
-              free(hash);
-            }
-
             // Immediately poweroff:
             poweroff();
 
@@ -591,21 +327,8 @@ readpw(Display *dpy, const char *pws)
             for (;;)
               sleep(1);
           } else {
-            // Take a webcam shot of whoever
-            // is tampering with our machine.
-            webcam_shot(1);
-
-            // Send an SMS via twilio.
-            twilio_send("Bad screenlock password.", NULL, 1);
           }
 
-          // Play a siren if there are more than 2 bad
-          // passwords, a beep if a correct password.
-          if (lock_tries > 2) {
-            play_alarm(0);
-          } else {
-            play_beep(0);
-          }
         }
 
         len = 0;
@@ -645,26 +368,6 @@ readpw(Display *dpy, const char *pws)
       case XK_F13: {
         // Disable alt+sysrq and ctrl+alt+backspace.
         disable_kill();
-
-        // Take a webcam shot of whoever
-        // is tampering with our machine.
-        webcam_shot(0);
-
-        // Upload our image:
-        char *link, *hash;
-        int success = imgur_upload(&link, &hash);
-
-        // Send an SMS/MMS via twilio.
-        twilio_send("Bad screenlock key.", link, 0);
-
-        // Success. Cleanup.
-        if (success) {
-          // Delete the image from imgur.
-          imgur_delete(hash);
-
-          free(link);
-          free(hash);
-        }
 
         // Immediately poweroff:
         poweroff();
