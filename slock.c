@@ -81,8 +81,8 @@ dontkillme(void) {
   return;
 
 error:
-  fprintf(stderr, "cannot disable the OOM killer for this process\n");
-  fprintf(stderr, "trying with sudo...\n");
+  /* fprintf(stderr, "cannot disable the OOM killer for this process\n"); */
+  /* fprintf(stderr, "trying with sudo...\n"); */
 
   pid_t pid = getpid();
 
@@ -213,8 +213,10 @@ poweroff(void) {
   // Needs sudo privileges - alter your /etc/sudoers file:
   // systemd: [username] [hostname] =NOPASSWD: /usr/bin/systemctl poweroff
   // sysvinit: [username] [hostname] =NOPASSWD: /usr/bin/shutdown -h now
-  system("sudo -n systemctl poweroff 2> /dev/null");
-  system("sudo -n shutdown -h now 2> /dev/null");
+
+  /* system("sudo -n systemctl poweroff 2> /dev/null"); */
+  /* system("sudo -n shutdown -h now 2> /dev/null"); */
+  return;
 #else
   return;
 #endif
@@ -316,18 +318,19 @@ readpw(Display *dpy, const char *pws)
           lock_tries++;
 
           // Poweroff if there are more than 5 bad attempts.
-          if (lock_tries > 5) {
-            // Disable alt+sysrq and ctrl+alt+backspace
-            disable_kill();
 
-            // Immediately poweroff:
-            poweroff();
+          /* if (lock_tries > 5) { */
+          /*   // Disable alt+sysrq and ctrl+alt+backspace */
+          /*   disable_kill(); */
 
-            // If we failed, loop forever.
-            for (;;)
-              sleep(1);
-          } else {
-          }
+          /*   // Immediately poweroff: */
+          /*   poweroff(); */
+
+          /*   // If we failed, loop forever. */
+          /*   for (;;) */
+          /*     sleep(1); */
+          /* } else { */
+          /* } */
 
         }
 
@@ -367,14 +370,14 @@ readpw(Display *dpy, const char *pws)
       case XK_F12:
       case XK_F13: {
         // Disable alt+sysrq and ctrl+alt+backspace.
-        disable_kill();
+        /* disable_kill(); */
 
-        // Immediately poweroff:
-        poweroff();
+        /* // Immediately poweroff: */
+        /* poweroff(); */
 
-        // If we failed, loop forever.
-        for (;;)
-          sleep(1);
+        /* // If we failed, loop forever. */
+        /* for (;;) */
+        /*   sleep(1); */
 
         break;
       }
@@ -642,18 +645,12 @@ main(int argc, char **argv) {
 
   g_pw = read_pw_file();
 
-  if ((argc >= 2) && strcmp(argv[1], "-v") == 0) {
-    die("slock-%s, © 2006-2012 Anselm R Garbe\n", VERSION);
-  } else if (argc != 1) {
-    usage();
-  }
-
 #ifdef __linux__
   dontkillme();
 #endif
 
-  if (!g_pw && !getpwuid(getuid()))
-    die("slock: no passwd entry for you\n");
+if (!g_pw && !getpwuid(getuid()))
+  die("slock: no passwd entry for you\n");
 
 #ifndef HAVE_BSD_AUTH
   pws = getpw();
