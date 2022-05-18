@@ -371,9 +371,9 @@ int main(int argc, char **argv) {
 
   // Insert authentication logic here
   //sleep(3);
-  int code = WEXITSTATUS(system("python /usr/lib/security/howdy/compare.py prayuj"));
+  int code = WEXITSTATUS(system("python /usr/lib/security/howdy/compare.py prayuj 2>/dev/null 1>&2"));
   while (code != 0) {
-     code = WEXITSTATUS(system("python /usr/lib/security/howdy/compare.py prayuj"));
+    code = WEXITSTATUS(system("python /usr/lib/security/howdy/compare.py prayuj 2>/dev/null 1>&2"));
   }
 
   for (screen = 0; screen < nscreens; screen++)
